@@ -1,8 +1,31 @@
+    /*地图样式*/
+    var mapStyle = [
+        {
+            "featureType": "arterial",
+            "elementType": "geometry.stroke",
+            "stylers": {
+                "color": "#444444ff",
+                "lightness": 61
+            }
+        },
+        {
+            "featureType": "local",
+            "elementType": "geometry",
+            "stylers": {
+                "color": "#ccccccff",
+                "lightness": 39
+            }
+        }
+    ];
 
-    /*地图 标记 图标*/
+    /*车辆经纬度*/
+    var carPoint = [];
+
+    /*地图 标记 图标 原始经纬度到百度地图经纬度的转换器*/
     var map = null;
     var marker = null;
     var icon = null;
+    var convertor = new BMap.Convertor();
 
     /*视频组件*/
     var video = $('#video');
@@ -35,24 +58,23 @@
 
     /*初始化地图*/
     function initMap() {
-        var center = {lat: 39.718876, lng: 116.53952};
-        map = new google.maps.Map(document.getElementById('map'), {
-            zoom: 16,
-            center: center,
-            mapTypeId: google.maps.MapTypeId.HYBRID
+        carPoint = [116.53952, 39.718876];
+        var center = new BMap.Point(116.53952, 39.718876);
+
+        map = new BMap.Map('map');
+        map.enableScrollWheelZoom();
+        map.centerAndZoom(center, 16);
+        map.setMapStyle({
+            styleJson:mapStyle
         });
-        marker = new google.maps.Marker({
-            position: center,
-            map: map
-        });
-        icon = {
-            path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-            rotation: 0,
-            fillColor: 'red',
-            strokeColor: 'red',
-            scale: 6
-        };
-        marker.setIcon(icon);
+
+        icon = new BMap.Icon('http://lbsyun.baidu.com/jsdemo/img/car.png', new BMap.Size(52,26),{anchor : new BMap.Size(27, 13)});
+        marker = new BMap.Marker(center,{icon: icon});
+        marker.setRotation(-90);
+
+        map.addOverlay(marker);
+
+        map.addControl(new BMap.MapTypeControl());
     }
 
     /*获取日志*/
@@ -69,7 +91,7 @@
         var ajax = new XMLHttpRequest();
         ajax.open('GET', url, true);
         ajax.onreadystatechange = function() {
-            if (ajax.readyState == 4) {
+            if (ajax.readyState === 4) {
                 logFile += ajax.responseText;
             }
         };
@@ -121,13 +143,27 @@
                 logTime = logs[currentFrame][logLen - 1];
             }
 
-            latitude.get(0).innerHTML = '维度:' + logs[currentFrame][1];
-            longitude.get(0).innerHTML = '经度:' + logs[currentFrame][2];
+
             rotation.get(0).innerHTML = '角度:' + logs[currentFrame][4];
-            marker.setPosition({lat: logs[currentFrame][1], lng: logs[currentFrame][2]});
-            icon['rotation'] = logs[currentFrame][4];
-            marker.setIcon(icon);
-            map.panTo({lat: logs[currentFrame][1], lng: logs[currentFrame][2]});
+
+            marker.setRotation(logs[currentFrame][4] - 90);
+
+            if(logs[currentFrame][2] === carPoint[0] && logs[currentFrame][1] === carPoint[1]) {
+                return;
+            }
+
+            carPoint = [logs[currentFrame][2], logs[currentFrame][1]];
+            var ggPoint = new BMap.Point(logs[currentFrame][2], logs[currentFrame][1]);
+            convertor.translate([ggPoint], 1, 5, function (data) {
+                if(data.status === 0) {
+                    var bdPoint = data.points[0];
+                    latitude.html('维度:' + bdPoint.lat);
+                    longitude.html('经度:' + bdPoint.lng);
+
+                    marker.setPosition(bdPoint);
+                    map.panTo(bdPoint);
+                }
+            });
         }, 20);
     });
 
